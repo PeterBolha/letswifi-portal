@@ -13,6 +13,7 @@ CREATE TABLE `realm_signing_log` (
 		`x509` blob DEFAULT NULL,
 		`revoked` datetime DEFAULT NULL,
 		`usage` enum('client','server') COLLATE utf8mb4_unicode_ci NOT NULL,
+		`source` enum('server_generated','csr') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'server_generated',
 		`client` varchar(127) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
 		`user_agent` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
 		`ip` varchar(39) COLLATE utf8mb4_unicode_ci DEFAULT NULL,

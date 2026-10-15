@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS "realm_signing_log" (
 	"x509" TEXT,
 	"revoked" TEXT,
 	"usage" TEXT NOT NULL,
+	"source" TEXT NOT NULL DEFAULT 'server_generated',
 	"client" TEXT,
 	"user_agent" TEXT,
 	"ip" TEXT

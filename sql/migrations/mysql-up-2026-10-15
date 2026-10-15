@@ -1,0 +1,11 @@
+BEGIN;
+
+-- Distinguish how the keypair of an issued certificate was created:
+-- server_generated (classic flow) or csr (client generated the key and
+-- submitted a PKCS#10 request via /profiles/csr/).
+-- The usage column stays untouched: it describes the certificate's purpose
+-- (client/server), which does not change with the enrollment mechanism.
+ALTER TABLE `realm_signing_log`
+	ADD COLUMN `source` enum('server_generated','csr') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'server_generated' AFTER `usage`;
+
+COMMIT;

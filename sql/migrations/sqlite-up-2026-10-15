@@ -1,0 +1,9 @@
+BEGIN;
+
+-- Distinguish how the keypair of an issued certificate was created:
+-- server_generated (classic flow) or csr (client generated the key and
+-- submitted a PKCS#10 request via /profiles/csr/).
+ALTER TABLE "realm_signing_log"
+	ADD COLUMN "source" TEXT NOT NULL DEFAULT 'server_generated';
+
+COMMIT;
