@@ -110,4 +110,24 @@ return [
 	// This name is displayed in the System Settings app, under Device Management.
 	// OPTIONAL: String
 	// 'mobileconfig_display_name' => "Let's Wi-Fi",
+
+	// CSR enrollment (POST a PKCS#10 request to /profiles/csr/) settings;
+	// all are optional, the shown values are the defaults
+
+	// Maximum number of concurrently valid (not revoked, not expired)
+	// CSR-issued certificates per requester in this realm
+	// OPTIONAL: String, integer
+	// 'csr_issuance_limit' => '10',
+
+	// Minimum accepted RSA key size in the CSR
+	// OPTIONAL: String, integer
+	// 'csr_rsa_min_bits' => '2048',
+
+	// Comma-separated list of accepted EC curves in the CSR
+	// OPTIONAL: String
+	// 'csr_ec_curves' => 'prime256v1,secp384r1',
+
+	// Whether to accept Ed25519 keys in CSRs; requires OpenSSL support
+	// OPTIONAL: String, truthy value enables
+	// 'csr_allow_ed25519' => 'false',
 ];

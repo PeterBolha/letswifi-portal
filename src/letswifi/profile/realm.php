@@ -74,6 +74,10 @@ class Realm implements JsonSerializable
 			extra: \array_filter( [
 				'mobileconfig_identifier' => $realmData->getStringOrNull( 'mobileconfig_identifier' ),
 				'mobileconfig_display_name' => $realmData->getStringOrNull( 'mobileconfig_display_name' ),
+				'csr_issuance_limit' => $realmData->getStringOrNull( 'csr_issuance_limit' ),
+				'csr_rsa_min_bits' => $realmData->getStringOrNull( 'csr_rsa_min_bits' ),
+				'csr_ec_curves' => $realmData->getStringOrNull( 'csr_ec_curves' ),
+				'csr_allow_ed25519' => $realmData->getStringOrNull( 'csr_allow_ed25519' ),
 			] ),
 		);
 	}
