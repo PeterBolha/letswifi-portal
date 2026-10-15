@@ -297,4 +297,39 @@ return [
 	// directory configured, instead of listing all certificate material inline.
 	// REQUIRED: Array x509, key, issuer
 	'certificate#pemdir' => 'certs/',
+
+	// CA signing configuration.  Without this section, signing uses the
+	// private key from the certificate configuration (file based PEM keys).
+	// OPTIONAL: Array
+	// 'signing' => [
+	// 	// Path to the OpenSSL binary used for signing and CSR validation.
+	// 	// OPTIONAL: String, default: openssl (from PATH)
+	// 	'binary' => 'openssl',
+	//
+	// 	// Per-certificate signing key overrides, keyed by certificate
+	// 	// subject as used in the 'signer' realm setting.  Use this to
+	// 	// sign with a key stored in a PKCS#11 token (HSM or software
+	// 	// token) instead of a key file.  The certificate itself still
+	// 	// comes from the regular certificate configuration.
+	// 	// When a pkcs11_uri is configured for a signer, there is no
+	// 	// fallback to a file key: signing fails closed if the token is
+	// 	// unreachable.  Requires OpenSSL 3 with a PKCS#11 provider.
+	// 	// Never put PINs in source control; prefer pkcs11_pin_env.
+	// 	'certificates' => [
+	// 		'CN=example.com Let\'s Wi-Fi CA' => [
+	// 			// RFC 7512 URI selecting the private key on the token
+	// 			'pkcs11_uri' => 'pkcs11:token=letswifi;object=ca;type=private',
+	//
+	// 			// The token PIN, either inline (NOT recommended) or
+	// 			// as the name of an environment variable holding it
+	// 			// 'pkcs11_pin' => '000000',
+	// 			'pkcs11_pin_env' => 'LETSWIFI_PKCS11_PIN',
+	//
+	// 			// Path to the PKCS#11 module to load; when omitted,
+	// 			// the p11-kit proxy configuration is used
+	// 			// OPTIONAL: String
+	// 			'pkcs11_module' => '/usr/lib/softhsm/libsofthsm2.so',
+	// 		],
+	// 	],
+	// ],
 ];

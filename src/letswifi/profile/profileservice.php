@@ -10,11 +10,16 @@
 
 namespace letswifi\profile;
 
+use DomainException;
 use PDO;
 use fyrkat\configmap\Dictionary;
 use fyrkat\openssl\PrivateKey;
 use fyrkat\openssl\X509;
 use letswifi\error\MisdirectException;
+use letswifi\signing\FileSigningKey;
+use letswifi\signing\OpenSSLCli;
+use letswifi\signing\Pkcs11SigningKey;
+use letswifi\signing\SigningKey;
 
 class ProfileService
 {
@@ -81,6 +86,62 @@ class ProfileService
 		$certificateData = $certificates->getDictionary( $sub );
 
 		return new PrivateKey( $certificateData->getString( 'key' ), $certificateData->getStringOrNull( 'passphrase' ) );
+	}
+
+	/**
+	 * Get the signing key for a certificate subject.
+	 *
+	 * If the `signing.certificates` overlay contains the subject with a
+	 * `pkcs11_uri`, the key is assumed to live in a PKCS#11 token and the
+	 * returned implementation signs through the OpenSSL CLI with the PKCS#11
+	 * provider; the PIN is then read from `pkcs11_pin` or from the environment
+	 * variable named by `pkcs11_pin_env`.  The overlay exists because the
+	 * `certificate#pemdir` sigil only exposes certificate material from .pem
+	 * files; it is the recommended way to reference HSM keys in production.
+	 *
+	 * Otherwise the `key` PEM from the certificate configuration is used,
+	 * which keeps the classic behaviour of using file based CA keys.
+	 *
+	 * Signing always fails closed when the configured key or token is not
+	 * usable; there is no fallback between the two types.
+	 */
+	public function getSigningKey( string $sub ): SigningKey
+	{
+		$certificates = $this->config->getDictionary( 'certificate' );
+		$certificateData = $certificates->getDictionary( $sub );
+		$signingConfig = $this->config->getDictionaryOrNull( 'signing' );
+		$cli = $this->getOpenSSLCli();
+		$certificate = new X509( $certificateData->getString( 'x509' ) );
+
+		$entry = $signingConfig?->getDictionaryOrNull( 'certificates' )?->getDictionaryOrNull( $sub );
+		$uri = $entry?->getStringOrNull( 'pkcs11_uri' );
+		if ( null !== $uri ) {
+			$pin = $entry->getStringOrNull( 'pkcs11_pin' );
+			if ( null === $pin ) {
+				$pinEnv = $entry->getStringOrNull( 'pkcs11_pin_env' );
+				if ( null !== $pinEnv ) {
+					$pin = \getenv( $pinEnv ) ?: null;
+				}
+			}
+			if ( null === $pin || '' === $pin ) {
+				throw new DomainException( "Signing key {$sub}: PKCS#11 URI configured but no PIN available" );
+			}
+
+			return new Pkcs11SigningKey( $cli, $certificate, $uri, $pin, $entry->getStringOrNull( 'pkcs11_module' ) );
+		}
+
+		return new FileSigningKey( $cli, $certificate, $certificateData->getString( 'key' ), $certificateData->getStringOrNull( 'passphrase' ) );
+	}
+
+	/**
+	 * The OpenSSL CLI wrapper, using the configured binary if overridden in
+	 * the `signing.binary` config key.
+	 */
+	public function getOpenSSLCli(): OpenSSLCli
+	{
+		$binary = $this->config->getDictionaryOrNull( 'signing' )?->getStringOrNull( 'binary' ) ?? 'openssl';
+
+		return new OpenSSLCli( $binary );
 	}
 
 	/**
