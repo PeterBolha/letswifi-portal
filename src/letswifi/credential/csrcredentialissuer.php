@@ -13,9 +13,11 @@ namespace letswifi\credential;
 use DateTimeImmutable;
 use DomainException;
 use PDO;
+use Throwable;
 use fyrkat\openssl\DN;
 use fyrkat\openssl\X509;
 use letswifi\auth\User;
+use letswifi\error\UserException;
 use letswifi\profile\ProfileService;
 use letswifi\profile\Realm;
 
@@ -50,15 +52,10 @@ class CsrCredentialIssuer
 	/**
 	 * Extensions for the issued certificate; deliberately does NOT copy any
 	 * extension requested in the CSR.  The -clrext flag in the signing key
-	 * drops CSR-requested extensions before these are applied.
+	 * drops CSR-requested extensions before these are applied.  Same set as
+	 * the classic flow issues.
 	 */
-	public const EXTENSIONS = <<<CONF
-		subjectKeyIdentifier   = hash
-		authorityKeyIdentifier = keyid:always, issuer:always
-		basicConstraints       = CA:FALSE
-		keyUsage               = digitalSignature, nonRepudiation, keyEncipherment
-		extendedKeyUsage       = clientAuth
-		CONF;
+	public const EXTENSIONS = CertificateCredentialIssuer::EXTENSIONS;
 
 	/** @param User $user the authenticated requester; identity never comes from the CSR */
 	public function __construct(
@@ -86,15 +83,23 @@ class CsrCredentialIssuer
 
 		$serial = $this->logPreparedCredential( $caCert, $csrPem, $subject, $ident, $notBefore, $notAfter );
 
-		$signingKey = $this->profileService->getSigningKey( $this->realm->signer );
-		$userCert = $signingKey->sign(
-			$csrPem,
-			$subject,
-			static::EXTENSIONS,
-			$serial,
-			$notBefore,
-			$notAfter,
-		);
+		try {
+			$signingKey = $this->profileService->getSigningKey( $this->realm->signer );
+			$userCert = $signingKey->sign(
+				$csrPem,
+				$subject,
+				static::EXTENSIONS,
+				$serial,
+				$notBefore,
+				$notAfter,
+			);
+		} catch ( Throwable $ex ) {
+			// The row is kept as an audit record of the failed attempt, is excluded from the
+			// issuance quota ("x509" IS NOT NULL) and is never deleted.
+			\error_log( "Prepared credential serial {$serial} for {$ident} was not signed: {$ex}" );
+
+			throw new UserException( 'signing_failed: Certificate signing backend failed', 502, $ex );
+		}
 
 		$this->logCompletedCredential( $userCert, $ident );
 
@@ -119,7 +124,8 @@ class CsrCredentialIssuer
 
 	/**
 	 * Per-requester issuance limit, since the classic flow has no other cap
-	 * and this endpoint is a direct signing path.
+	 * and this endpoint is a direct signing path.  Rows without a signed
+	 * certificate (failed attempts kept as audit records) do not count.
 	 */
 	private function checkIssuanceLimit(): void
 	{
@@ -131,6 +137,7 @@ class CsrCredentialIssuer
 			WHERE "realm" = :realm
 				AND "requester" = :requester
 				AND "source" = :source
+				AND "x509" IS NOT NULL
 				AND "revoked" IS NULL
 				AND "expires" > :now
 			SQL );
@@ -141,7 +148,7 @@ class CsrCredentialIssuer
 		$statement->execute();
 		$count = (int)$statement->fetchColumn();
 		if ( $count >= $max ) {
-			throw new DomainException( "Issuance limit reached for realm {$this->realm->realmId}" );
+			throw new UserException( "issuance_limit_reached: Issuance limit reached for realm {$this->realm->realmId}", 429 );
 		}
 	}
 

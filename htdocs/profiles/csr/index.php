@@ -19,6 +19,9 @@ use letswifi\profile\Realm;
 require \implode( \DIRECTORY_SEPARATOR, [\dirname( __DIR__, 3 ), 'src', '_autoload.php'] );
 \assert( \array_key_exists( 'REQUEST_METHOD', $_SERVER ) );
 
+/** Seconds advertised in Retry-After when the per-requester issuance limit (429) is hit */
+const CSR_RETRY_AFTER_SECONDS = 3600;
+
 $app = new LetsWifiApp( basePath: '../..' );
 $provider = $app->getProvider();
 
@@ -56,7 +59,18 @@ switch ( $_SERVER['REQUEST_METHOD'] ) {
 			now: new DateTimeImmutable(),
 			profileService: $app->profileService,
 		);
-		$credential = $issuer->issueFromCsr( $csrPem );
+
+		try {
+			$credential = $issuer->issueFromCsr( $csrPem );
+		} catch ( UserException $e ) {
+			// The issuance limit is minute-scale state, not a fixed window;
+			// one hour is a safe Retry-After (see API.md).
+			if ( 429 === $e->getCode() ) {
+				\header( 'Retry-After: ' . CSR_RETRY_AFTER_SECONDS );
+			}
+
+			throw $e;
+		}
 
 		$formatter = Format::getFormatter(
 			'pem-certificate',
@@ -84,7 +98,7 @@ function readCsrInput(): string
 		return $csr;
 	}
 	if ( \is_array( $csr ) ) {
-		throw new UserException( 'Invalid CSR submitted', 400 );
+		throw new UserException( 'csr_invalid: Invalid CSR submitted', 400 );
 	}
 
 	$body = \file_get_contents( 'php://input' );
@@ -93,7 +107,7 @@ function readCsrInput(): string
 		return $body;
 	}
 
-	throw new UserException( 'No CSR provided', 400 );
+	throw new UserException( 'no_csr: No CSR provided', 400 );
 }
 
 /**

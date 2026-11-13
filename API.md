@@ -89,6 +89,37 @@ You can revoke someone like this, copy the `valid_on` field from your result, or
 Please note that at this time, the API will answer with 302 Found on success.
 This will be fixed in a later release.
 
+## Enroll from a client-generated CSR
+
+`POST /profiles/csr/` accepts a PKCS#10 certificate signing request (PEM or
+DER, max 16 KiB) and returns the signed client certificate plus chain as
+PEM. The client keeps its private key; the server never sees it. Subject,
+extensions and validity are set by the server from the authenticated
+requester and realm configuration; anything the CSR asks for is ignored.
+
+Authentication is identical to `/profiles/new/`: a browser session or an
+OAuth2 bearer token with the `eap-metadata` scope. Optionally pass
+`?realm=<id>` (or POST field `realm`) when the user has several realms.
+
+```sh
+% curl -sS --fail-with-body -HAuthorization:Bearer\ $TOKEN \
+	-H 'Content-Type: application/pkcs10' \
+	--data-binary @client.csr \
+	'https://HOSTNAME/profiles/csr/'
+```
+
+Status codes:
+
+- `200` — certificate and chain in PEM (no private key)
+- `401` — missing or invalid authentication
+- `400` — CSR rejected; the body starts with a machine-readable code:
+  `no_csr`, `csr_invalid`, `csr_too_large`, `csr_malformed`,
+  `rsa_too_small`, `curve_not_allowed`, `key_type_not_allowed`,
+  `bad_signature`
+- `429` — per-requester issuance limit reached (`Retry-After: 3600`);
+  configurable per realm with the `csr_issuance_limit` extra
+- `502` — the certificate signing backend (CA key or token) failed
+
 ## Generate CRL
 
 ```sh
@@ -106,3 +137,8 @@ or (identical effect)
 	-o "example.com Let's Wi-Fi CA.crl" \
 	'https://HOSTNAME/admin/realms/certificate.php?realm_id=example.com&ca=CN%3Dexample.com+Let%27s+Wi-Fi+CA&file=crl-pem'
 ```
+
+CRL generation requires a **file-based** CA key. For a realm whose CA key
+lives on a PKCS#11 token this endpoint answers `501 Not Implemented`
+(PKCS#11 CRL signing is planned but not implemented).
+Other CA material (certificate, index) works for both CA types.

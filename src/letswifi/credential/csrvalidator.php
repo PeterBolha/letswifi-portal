@@ -18,6 +18,10 @@ use letswifi\signing\OpenSSLCli;
  *
  * Only the public key of the CSR is trusted to be meaningful; subject and
  * extensions requested in the CSR are ignored by the issuer.
+ *
+ * Rejections throw UserException with HTTP 400 and a machine-readable
+ * error code as message prefix ("code: human readable text"), documented
+ * in API.md under the /profiles/csr/ endpoint.
  */
 final class CsrValidator
 {
@@ -56,10 +60,10 @@ final class CsrValidator
 	public function validate( string $input, array $policy = [] ): string
 	{
 		if ( '' === \trim( $input ) ) {
-			throw new UserException( 'No CSR provided' );
+			throw new UserException( 'no_csr: No CSR provided', 400 );
 		}
 		if ( \strlen( $input ) > self::MAX_INPUT_SIZE ) {
-			throw new UserException( 'CSR too large' );
+			throw new UserException( 'csr_too_large: CSR too large', 400 );
 		}
 
 		$csrPem = \str_contains( $input, '-----BEGIN' ) ? $input : $this->derToPem( $input );
@@ -77,7 +81,7 @@ final class CsrValidator
 		$this->cli->run( ['req', '-inform', 'der', '-in', $in->path, '-outform', 'pem', '-out', $out->path] );
 		$pem = \file_get_contents( $out->path );
 		if ( false === $pem || !\str_contains( $pem, '-----BEGIN' ) ) {
-			throw new UserException( 'Malformed CSR' );
+			throw new UserException( 'csr_malformed: Malformed CSR', 400 );
 		}
 
 		return $pem;
@@ -95,11 +99,11 @@ final class CsrValidator
 	{
 		$publicKey = \openssl_csr_get_public_key( $csrPem, false );
 		if ( false === $publicKey ) {
-			throw new UserException( 'Malformed CSR' );
+			throw new UserException( 'csr_malformed: Malformed CSR', 400 );
 		}
 		$details = \openssl_pkey_get_details( $publicKey );
 		if ( false === $details ) {
-			throw new UserException( 'Malformed CSR' );
+			throw new UserException( 'csr_malformed: Malformed CSR', 400 );
 		}
 
 		$curves = \array_map( 'strval', (array)$policy['ec_curves'] );
@@ -107,21 +111,21 @@ final class CsrValidator
 		switch ( $details['type'] ) {
 			case \OPENSSL_KEYTYPE_RSA:
 				if ( $details['bits'] < $policy['rsa_min_bits'] ) {
-					throw new UserException( "RSA key too small; minimum is {$policy['rsa_min_bits']} bits" );
+					throw new UserException( "rsa_too_small: RSA key too small; minimum is {$policy['rsa_min_bits']} bits", 400 );
 				}
 				break;
 
 			case \OPENSSL_KEYTYPE_EC:
 				$curve = (string)( $details['ec']['curve_name'] ?? '' );
 				if ( !\in_array( $curve, $curves, true ) ) {
-					throw new UserException( "EC curve {$curve} is not allowed" );
+					throw new UserException( "curve_not_allowed: EC curve {$curve} is not allowed", 400 );
 				}
 				break;
 
 			default:
 				$ed25519 = \defined( '\\OPENSSL_KEYTYPE_ED25519' ) && \OPENSSL_KEYTYPE_ED25519 === $details['type'];
 				if ( !( $ed25519 && true === $policy['allow_ed25519'] ) ) {
-					throw new UserException( 'Key type is not allowed' );
+					throw new UserException( 'key_type_not_allowed: Key type is not allowed', 400 );
 				}
 		}
 	}
@@ -139,7 +143,7 @@ final class CsrValidator
 		try {
 			$this->cli->run( ['req', '-in', $csr->path, '-verify', '-noout'] );
 		} catch ( UserException $e ) {
-			throw new UserException( 'CSR signature verification failed' );
+			throw new UserException( 'bad_signature: CSR signature verification failed', 400 );
 		}
 	}
 }

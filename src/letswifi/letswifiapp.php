@@ -62,7 +62,10 @@ final class LetsWifiApp
 		411 => 'Length Required',
 		417 => 'Expectation Failed',
 		421 => 'Misdirected Request',
+		429 => 'Too Many Requests',
 		500 => 'Internal Server Error',
+		501 => 'Not Implemented',
+		502 => 'Bad Gateway',
 	];
 
 	/** Fallback locale used when the Accept-Language header was not set */
