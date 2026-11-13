@@ -34,6 +34,19 @@ class CertificateCredentialIssuer implements CredentialIssuer
 {
 	public const DATE_FORMAT = 'Y-m-d H:i:s';
 
+	/**
+	 * Extensions for issued client certificates; identical to the
+	 * "x509_client" section of fyrkat/openssl, which the classic flow used
+	 * before signing moved to the SigningKey abstraction.
+	 */
+	public const EXTENSIONS = <<<CONF
+		subjectKeyIdentifier   = hash
+		authorityKeyIdentifier = keyid:always, issuer:always
+		basicConstraints       = CA:FALSE
+		keyUsage               = digitalSignature, nonRepudiation, keyEncipherment
+		extendedKeyUsage       = clientAuth
+		CONF;
+
 	/** @param Closure(string):void $revoke */
 	public function __construct(
 		public readonly User $user,
@@ -149,10 +162,19 @@ class CertificateCredentialIssuer implements CredentialIssuer
 
 		$serial = $this->logPreparedUserCredential( $caCert, $csr, $expiry, $ident, 'client' );
 
-		$caKey = $this->profileService->getPrivateKey( $this->realm->signer );
-
-		$conf = new OpenSSLConfig( x509Extensions: OpenSSLConfig::X509_EXTENSION_CLIENT );
-		$userCert = $csr->sign( $caCert, $caKey, $expiry, $conf, $serial );
+		// Sign through the SigningKey abstraction, so a realm whose CA key
+		// lives on a PKCS#11 token works here too; file-backed realms sign
+		// identically to the previous CSR::sign() path (same extensions,
+		// subject, serial and validity).
+		$signingKey = $this->profileService->getSigningKey( $this->realm->signer );
+		$userCert = $signingKey->sign(
+			$csr->getCSRPem(),
+			$dn,
+			static::EXTENSIONS,
+			$serial,
+			$this->now,
+			$expiry,
+		);
 		$this->logCompletedUserCredential( $userCert, 'client' );
 
 		return new PKCS12( $userCert, $userKey, [$caCert] );
