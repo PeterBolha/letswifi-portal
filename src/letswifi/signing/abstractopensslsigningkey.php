@@ -45,7 +45,6 @@ abstract class AbstractOpenSSLSigningKey implements SigningKey
 
 		try {
 			$args = [
-				...$this->providerArgs(),
 				'x509',
 				'-req',
 				'-in', $csr->path,
@@ -63,6 +62,10 @@ abstract class AbstractOpenSSLSigningKey implements SigningKey
 				$args[] = '-passin';
 				$args[] = $key->passin->asPassinFile();
 			}
+			// Provider arguments go at the END of argv: OpenSSL only accepts
+			// -provider as an option of the subcommand; before 'x509' it is
+			// rejected with "Invalid command '-provider'".
+			$args = [...$args, ...$this->providerArgs()];
 			$this->cli->run( $args, $this->childEnvironment() );
 
 			$pem = \file_get_contents( $out->path );
@@ -114,8 +117,9 @@ abstract class AbstractOpenSSLSigningKey implements SigningKey
 	abstract protected function keyReference(): KeyReference;
 
 	/**
-	 * Arguments to place before the `x509` subcommand, e.g. to load a
-	 * provider.  Must not contain secrets.
+	 * Arguments to append after the options of the `x509` subcommand, e.g.
+	 * to load a provider.  Must not contain secrets.  They must NOT appear
+	 * before the subcommand: OpenSSL rejects `-provider` in that position.
 	 *
 	 * @return array<string> arguments, each a single argv element
 	 */
