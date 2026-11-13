@@ -14,6 +14,7 @@ use letswifi\LetsWifiApp;
 use letswifi\credential\CertificateCredential;
 use letswifi\error\ForbiddenException;
 use letswifi\error\NotFoundException;
+use letswifi\error\UserException;
 
 require \implode( \DIRECTORY_SEPARATOR, [\dirname( __DIR__, 3 ), 'src', '_autoload.php'] );
 $app = new LetsWifiApp( basePath: '../..' );
@@ -97,6 +98,14 @@ switch ( $fileType ) {
 		// Not implemented yet
 	case 'crl-pem':
 		$index = \getIndex( $ca );
+		// DEFERRED FEATURE: CRL signing over PKCS#11 is intended but not
+		// implemented yet (roadmap: a raw-signing method alongside
+		// SigningKey::sign()).  Fail here naming the cause instead of letting
+		// the file-key-only CRL path below report a misleading "key: Not
+		// set" configuration error.  Never fall back to a file key.
+		if ( $app->profileService->isTokenBacked( $ca ) ) {
+			throw new UserException( 'CRL generation requires a file-based CA key; PKCS#11 CRL signing is not implemented yet', 501 );
+		}
 		$privateKey = $app->profileService->getPrivateKey( $ca );
 		$crl = new CRL( $privateKey, $caCertificate );
 		\header( 'Content-Type: application/x-pkcs7-crl' );

@@ -134,6 +134,19 @@ class ProfileService
 	}
 
 	/**
+	 * Whether the `signing.certificates` overlay assigns this certificate's
+	 * key to a PKCS#11 token, without loading the key.  Lets callers that
+	 * only support file-based keys (CRL generation) say so explicitly
+	 * instead of failing with a confusing "key: Not set" later.
+	 */
+	public function isTokenBacked( string $sub ): bool
+	{
+		$entry = $this->config->getDictionaryOrNull( 'signing' )?->getDictionaryOrNull( 'certificates' )?->getDictionaryOrNull( $sub );
+
+		return null !== $entry?->getStringOrNull( 'pkcs11_uri' );
+	}
+
+	/**
 	 * The OpenSSL CLI wrapper, using the configured binary if overridden in
 	 * the `signing.binary` config key.
 	 */
