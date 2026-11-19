@@ -78,7 +78,16 @@ final class CsrValidator
 	{
 		$in = OpenSSLCli::dataFile( $der, 'lwdsr' );
 		$out = OpenSSLCli::dataFile( '', 'lwdsp' );
-		$this->cli->run( ['req', '-inform', 'der', '-in', $in->path, '-outform', 'pem', '-out', $out->path] );
+
+		try {
+			$this->cli->run( ['req', '-inform', 'der', '-in', $in->path, '-outform', 'pem', '-out', $out->path] );
+		} catch ( UserException $e ) {
+			// Input without a PEM marker that OpenSSL cannot load is a client
+			// error, not a server error.  Never forward the OpenSSL error output:
+			// it contains include-directory and temporary file paths.  The
+			// original exception stays attached for the error log only.
+			throw new UserException( 'csr_malformed: Malformed CSR', 400, $e );
+		}
 		$pem = \file_get_contents( $out->path );
 		if ( false === $pem || !\str_contains( $pem, '-----BEGIN' ) ) {
 			throw new UserException( 'csr_malformed: Malformed CSR', 400 );
