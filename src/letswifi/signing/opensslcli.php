@@ -92,8 +92,9 @@ class OpenSSLCli
 	 * @param array<string,string> $extraEnv Additional environment for this
 	 *                                       call only; must never contain secrets
 	 *
-	 * @throws UserException when the command fails; the message contains the
-	 *                       openssl error output but never the arguments
+	 * @throws UserException when the command fails; the message is safe to show
+	 *                       to a client (never the arguments, never the openssl
+	 *                       error output), the latter goes to the error log
 	 *
 	 * @return string Raw standard output
 	 */
@@ -126,9 +127,16 @@ class OpenSSLCli
 			$err = (string)\file_get_contents( $errorFile->path );
 			$errorFile->cleanup();
 			if ( 0 !== $exit ) {
-				// Never include $command or $args; openssl error output may quote
-				// file names, but those are random temp paths, never secret values
-				throw new UserException( \sprintf( 'OpenSSL command failed (exit %d): %s', $exit, \trim( \substr( $err, 0, 500 ) ) ?: 'no error output') );
+				// The openssl error output goes to the server log only.  It quotes
+				// file names (random temp paths, never secret values) but also
+				// include directories, provider and token names, which must not
+				// reach an API client; callers show the short message below.
+				// The *tail* of stderr is kept: OpenSSL 3.x may report
+				// configuration problems before the actual error, so the front of
+				// the output is the least informative part.
+				\error_log( \sprintf( 'OpenSSL command failed (exit %d): %s', $exit, \trim( \substr( $err, -500 ) ) ?: 'no error output' ) );
+
+				throw new UserException( \sprintf( 'OpenSSL command failed (exit %d)', $exit ), 500 );
 			}
 			if ( !\is_string( $out ) ) {
 				throw new UserException( 'Unable to read OpenSSL output' );
